@@ -106,7 +106,7 @@ export function createAnswerQuestion(dependencies: AgentDependencies) {
       const cited = passages.filter(passage => draft.citationIds.includes(passage.id));
       const validIds = cited.length === draft.citationIds.length;
       const grounding = await stage('grounding_guard', () => guard(() => structured(
-        groundingGuardSchema, 'grounding_guard', groundingGuardMessages(decision.query, draft, cited), 2400,
+        groundingGuardSchema, 'grounding_guard', groundingGuardMessages(decision.query, draft, passages), 2400,
       )));
       if (grounding.verdict === 'blocked') return response('blocked', blockedAnswer);
       // The semantic guard checks entailment. Local checks additionally disallow invented IDs,
