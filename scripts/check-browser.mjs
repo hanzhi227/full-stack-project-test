@@ -30,6 +30,7 @@ try {
  assert.equal(await page.locator('details').first().evaluate(element => element.open), true);
  assert.equal(await page.locator('blockquote').first().textContent(), answer.citations[0].excerpt);
  assert.ok(handbook.toString().includes(answer.citations[0].excerpt));
+ await page.locator('blockquote').first().evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished)));
  const cookies = await context.cookies(); const session = cookies.find(cookie => cookie.name === 'document_qa_workspace');
  assert.ok(session?.httpOnly); assert.equal(session.sameSite, 'Lax');
  if (base.startsWith('https:')) assert.equal(session.secure, true);
@@ -37,7 +38,7 @@ try {
  await page.screenshot({ path: '.impeccable/review/desktop.png', fullPage: true });
  await page.setViewportSize({ width: 390, height: 844 });
  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
- const panels = await page.locator('.workspace-panels').evaluate(element => getComputedStyle(element).gridTemplateColumns);
+ const panels = await page.locator('.binder-page').evaluate(element => getComputedStyle(element).gridTemplateColumns);
  assert.equal(panels.split(' ').length, 1);
  await page.screenshot({ path: '.impeccable/review/mobile.png', fullPage: true });
  await page.reload(); await page.getByRole('checkbox').waitFor();
