@@ -2,12 +2,15 @@
   "name": "document-qa",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start -H 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test tests/*.test.ts src/components/*.test.ts src/components/*.test.tsx",
     "setup:vectors": "tsx --env-file=.env scripts/setup-vector-store.ts",
     "check:providers": "tsx --env-file=.env scripts/check-providers.ts",
     "eval": "tsx --env-file=.env scripts/evaluate.ts"

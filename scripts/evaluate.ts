@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { cases } from '../evals/cases';
+import { citationMatchesSource } from '../evals/citations';
 import { askResponseSchema, type ApiError, type AskResponse, type DocumentSummary } from '../src/contracts';
 const base = process.env.EVAL_BASE_URL ?? 'http://localhost:3000';
 class BrowserSession {
@@ -34,8 +35,7 @@ async function main() {
   const sources=response?.citations ?? [];
   const exactSources = sources.every(c => {
    const source=c.documentId===document.id ? handbook : c.documentId===attackDoc.id ? injected : '';
-   const span=source.replace(/\r\n/g,'\n').split('\n').slice(c.startLine-1,c.endLine).join('\n');
-   return source.length>0 && c.excerpt.length>0 && span.includes(c.excerpt);
+   return source.length > 0 && citationMatchesSource(c, source);
   });
   const citationValidity=response ? exactSources && (response.status==='answered' ? sources.length>0 : sources.length===0) : item.foreignSession;
   const answerTerms=!(item.answerIncludes?.some(term=>!response?.answer.toLowerCase().includes(term.toLowerCase())));
