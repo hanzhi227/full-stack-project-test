@@ -5,5 +5,5 @@ export function requiredEnv(name: string): string {
  return value;
 }
 export function missingConfiguration(): string[] {
- return ['OPENROUTER_API_KEY','OPENROUTER_EMBEDDING_MODEL','OPENROUTER_CHAT_MODEL','ZILLIZ_ENDPOINT','ZILLIZ_TOKEN','SESSION_SIGNING_SECRET'].filter(name => !process.env[name]?.trim());
+ return ['OPENROUTER_API_KEY','OPENROUTER_EMBEDDING_MODEL','OPENROUTER_CHAT_MODEL','OPENROUTER_DECISION_MODEL','ZILLIZ_ENDPOINT','ZILLIZ_TOKEN','SESSION_SIGNING_SECRET'].filter(name => !process.env[name]?.trim());
 }

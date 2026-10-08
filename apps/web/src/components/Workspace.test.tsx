@@ -10,7 +10,7 @@ test('initial workspace renders binding copy, labels, announcements and safe loa
     'Ask your documents',
     'Upload a handbook or guide, then ask a question. Answers include passages you can check.',
     'Upload document',
-    'TXT or Markdown · up to 1 MB per file · up to 5 documents',
+    'PDF, TXT or Markdown · up to 50 MB per file · up to 5 documents',
     'What would you like to know?',
     'What do I need to do before requesting reimbursement?',
     'Start new conversation',

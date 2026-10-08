@@ -7,7 +7,7 @@ if (!['http:', 'https:'].includes(backend.protocol) || backend.username || backe
 const config: NextConfig = {
  output: 'standalone', outputFileTracingRoot: resolve(__dirname, '../..'),
  transpilePackages: ['@document-qa/contracts'],
- experimental: { proxyTimeout: 120_000, proxyClientMaxBodySize: '2mb' },
+ experimental: { proxyTimeout: 120_000, proxyClientMaxBodySize: '51mb' },
  async rewrites() { return [{ source: '/api/:path*', destination: `${backend.origin}/api/:path*` }]; },
  async headers() { return [{ source: '/:path*', headers: [
   { key: 'X-Content-Type-Options', value: 'nosniff' },

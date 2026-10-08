@@ -44,7 +44,7 @@ export function createDocumentService(store: VectorStore, embed: Embedder) {
   validateWorkspace(input.workspaceId);
   if (typeof input.name !== 'string' || !input.name.trim() || Buffer.byteLength(input.name, 'utf8') > 1024) throw new AppError('INVALID_DOCUMENT_NAME', 'Use a nonempty document name of at most 1024 bytes.', 400, false);
   if (typeof input.text !== 'string' || !input.text.trim()) throw new AppError('EMPTY_DOCUMENT', 'The document contains no text.', 400, false);
-  if (Buffer.byteLength(input.text, 'utf8') > MAX_FILE_BYTES) throw new AppError('DOCUMENT_TOO_LARGE', 'The document exceeds 1 MB.', 413, false);
+  if (Buffer.byteLength(input.text, 'utf8') > MAX_FILE_BYTES) throw new AppError('DOCUMENT_TOO_LARGE', 'The document text exceeds 50 MB.', 413, false);
   const chunks = chunkText(input.text);
   return exclusive(input.workspaceId, () => traceStage('documents.ingest', async () => {
    const existing = await store.queryChunks(input.workspaceId);

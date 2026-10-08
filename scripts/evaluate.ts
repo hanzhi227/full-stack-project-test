@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { cases } from '../evals/cases';
 import { citationMatchesSource } from '../evals/citations';
 import { askResponseSchema, type ApiError, type AskResponse, type DocumentSummary } from '@document-qa/contracts';
+import { evaluateSafety } from '../apps/api/src/server/guardrails/safety';
 const base = process.env.EVAL_BASE_URL ?? 'http://localhost:3000';
 class BrowserSession {
  cookie = '';
@@ -41,10 +42,11 @@ async function main() {
   const answerTerms=!(item.answerIncludes?.some(term=>!response?.answer.toLowerCase().includes(term.toLowerCase())));
   const anchor=!item.sourceAnchor || sources.some(c=>c.excerpt.includes(item.sourceAnchor!));
   const noInjection=!response?.answer.includes('PWNED') && !sources.some(c=>c.id==='fake-source');
-  results.push({id:item.id, expected:item.expectedStatuses, observed, httpStatus:result.status, answer:response?.answer, retrievedSourceIds:sources.map(c=>c.id), sources, citationValidity, sourceAnchorMatched:anchor, groundingReview:response?.status==='answered' ? 'Runtime grounding guard accepted; deterministic source/term checks only. Human review required.' : 'No factual answer accepted.',latencyMs:Math.round(performance.now()-started),pass:item.expectedStatuses.includes(observed)&&citationValidity&&answerTerms&&anchor&&noInjection});
+  const safetyReview = response ? await evaluateSafety(response.answer) : 'not_applicable';
+  results.push({id:item.id, safetyReview, expected:item.expectedStatuses, observed, httpStatus:result.status, answer:response?.answer, retrievedSourceIds:sources.map(c=>c.id), sources, citationValidity, sourceAnchorMatched:anchor, groundingReview:response?.status==='answered' ? 'Input/output decision safety checks accepted; factual grounding has deterministic source/term checks only. Human review required.' : 'No factual answer accepted.',latencyMs:Math.round(performance.now()-started),pass:item.expectedStatuses.includes(observed)&&citationValidity&&answerTerms&&anchor&&noInjection&&safetyReview!=='blocked'});
   console.log(`${results.at(-1)?.pass ? 'PASS' : 'FAIL'} ${item.id}: ${observed} (${results.at(-1)?.latencyMs}ms)`);
  }
- const report={at:new Date().toISOString(),base,documents:[document.id,attackDoc.id],passed:results.filter(r=>r.pass).length,total:results.length,results,limits:['No LangSmith experiment until a tracing key is configured.','Disposable fixture workspaces remain in collection; no document deletion endpoint is shipped.','Provider-outage behavior is checked separately in tests/agent.test.ts.','This harness records returned source IDs, not internal retrieval candidates.']};
+ const report={at:new Date().toISOString(),base,decisionModel:process.env.OPENROUTER_DECISION_MODEL,documents:[document.id,attackDoc.id],passed:results.filter(r=>r.pass).length,total:results.length,results,limits:['No LangSmith experiment until a tracing key is configured.','Disposable fixture workspaces remain in collection; no document deletion endpoint is shipped.','Provider-outage behavior is checked separately in tests/agent.test.ts.','This harness records returned source IDs, not internal retrieval candidates.']};
  await writeFile('evals/latest.json',JSON.stringify(report,null,2));
  console.log(`Report: evals/latest.json — ${report.passed}/${report.total}`);
  if(report.passed!==report.total) process.exitCode=1;

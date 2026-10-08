@@ -41,9 +41,9 @@ export function conversationHistory(turns: ConversationTurn[]): AskRequest['hist
 
 export function validateUpload(file: Pick<File, 'name' | 'size'>, count: number): string | null {
   if (count >= MAX_DOCUMENTS) return 'This workspace has 5 documents. Select an existing document to ask a question.';
-  if (!/\.(txt|md)$/i.test(file.name)) return 'Choose a TXT or Markdown (.md) file.';
+  if (!/\.(pdf|txt|md)$/i.test(file.name)) return 'Choose a PDF, TXT or Markdown (.md) file.';
   if (file.size === 0) return 'This file is empty. Choose a document with text.';
-  if (file.size > MAX_FILE_BYTES) return 'This file exceeds 1 MB. Choose a smaller document.';
+  if (file.size > MAX_FILE_BYTES) return 'This file exceeds 50 MB. Choose a smaller document.';
   return null;
 }
 

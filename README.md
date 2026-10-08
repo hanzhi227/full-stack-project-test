@@ -61,15 +61,17 @@ Health endpoints report application/configuration readiness, not live provider c
 - `apps/api/src/server/session.ts`: HMAC-signed HTTP-only workspace cookie; Secure in production, SameSite=Lax.
 - `apps/api/src/server/documents/`: source-preserving chunks, embedding batches, completion-safe indexing and rollback.
 - `apps/api/src/server/retrieval/`: session-filtered dense + BM25 hybrid search with RRF.
-- `apps/api/src/server/agent/` and `guardrails/`: request guard → retrieval → structured draft → grounding guard; one repair and a 90-second answer timeout.
+- `apps/api/src/server/agent/` and `guardrails/`: decision input safety → optional chat follow-up resolution → retrieval → structured draft → decision output safety; one draft repair and a 90-second answer timeout.
 - `evals/`, `scripts/evaluate.ts`, `scripts/check-browser.mjs`: deterministic source checks and real service/browser checks.
 - `docs/business-visual.md`: plain-language workflow visual.
+
+Set `OPENROUTER_DECISION_MODEL=cloudflare/clef` on the API service for input/output safety checks and in local `.env` for provider checks/evals. Decisions use `/api/alpha/decisions`, not Chat Completions. Clef's documented text truncation is handled with overlapping, bounded text chunks; these checks do not verify factual entailment or full-text relationships. Source IDs remain validated locally; factual grounding requires evaluation/human review.
 
 Verified provider choices: `qwen/qwen3-embedding-8b` (4096 dimensions), `deepseek/deepseek-v4.1-flash`. `document_chunks_v1` is the compatible hybrid collection; the old incompatible `document_chunks` was left untouched. Changing embedding models requires a new collection even if dimensions match.
 
 ## Limits
 
-TXT/Markdown only, 1 MB/file, five documents/workspace, up to six retrieved passages and six prior messages. Documents persist when a conversation resets; conversations do not survive refresh. Cookie expiry is seven days, but vector records are not automatically deleted. Large uploads are synchronous; cleanup outages/process death may leave unselectable records requiring scoped operational cleanup.
+PDF (selectable text), UTF-8 TXT/Markdown, 50 MB/file, five documents/workspace, up to six retrieved passages and six prior messages. Scanned PDFs need external OCR; encrypted or malformed PDFs are rejected. Indexing has a separate 512-chunk cap (roughly 1–1.4 million text characters), so a file within the upload limit can still require splitting. Documents persist when a conversation resets; conversations do not survive refresh. Cookie expiry is seven days, but vector records are not automatically deleted. Extraction, chunking, and indexing run synchronously in the API process during the upload request; embeddings are requested from OpenRouter and vectors stored in Zilliz, with no background ingestion service. Large uploads increase API memory/CPU use and may exceed the frontend's 120-second proxy timeout; cleanup outages/process death may leave unselectable records requiring scoped operational cleanup.
 
 Grounding is an LLM judgment, not a guarantee; inspect citations. No accounts, PDF extraction, streaming, semantic reranking or long-term chat memory. LangSmith tracing is disabled until its missing key is supplied; use fictional, non-sensitive data for remote traces. No claimed time savings or accuracy benchmark.
 

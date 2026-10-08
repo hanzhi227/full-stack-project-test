@@ -2,13 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { askRequestSchema, citationSchema, type AskRequest, type AskResponse, type Citation } from '@document-qa/contracts';
 import { AppError } from '../errors';
+import { InvalidModelOutputError, schemaDiagnostics } from '../model-output';
 import { retrieve } from '../retrieval';
 import { chatJson } from '../providers/openrouter';
 import { traceStage } from '../tracing';
 import {
-  draftSchema, generationMessages, groundingGuardMessages, groundingGuardSchema,
-  requestGuardMessages, requestGuardSchema,
+  draftSchema, generationMessages,
+  queryResolutionMessages, queryResolutionSchema,
 } from '../guardrails';
+
+import { evaluateSafety } from '../guardrails/safety';
 
 const MAX_CONTEXT_CHARACTERS = 32_000;
 const MAX_TIMEOUT_MS = 90_000;
@@ -18,6 +21,7 @@ const blockedAnswer = 'I cannot provide that answer. Please ask a question about
 type AgentDependencies = {
   retrieve: typeof retrieve;
   chatJson: typeof chatJson;
+  evaluateSafety: typeof evaluateSafety;
   traceStage?: typeof traceStage;
   timeoutMs?: number;
 };
@@ -52,23 +56,36 @@ export function createAnswerQuestion(dependencies: AgentDependencies) {
     const structured = async <T>(schema: z.ZodType<T>, name: string, messages: Parameters<typeof chatJson>[0]['messages'], maxTokens: number) => {
       const raw = await dependencies.chatJson({ messages, schema, name, signal: controller.signal, maxTokens });
       const result = schema.safeParse(raw);
-      if (!result.success) throw new AppError('INVALID_MODEL_OUTPUT', 'The model returned invalid structured output. Try again.');
+      if (!result.success) throw new InvalidModelOutputError({ reason: 'schema_mismatch', maxTokens, ...schemaDiagnostics(result.error) });
       return result.data;
     };
     const guard = async <T>(name: string, run: () => Promise<T>): Promise<T> => {
       try { return await run(); }
       catch (error) {
         if (controller.signal.aborted) throw timeoutError;
-        console.error(JSON.stringify({ requestId, stage: name, code: error instanceof AppError ? error.code : 'UNEXPECTED_GUARD_ERROR' }));
+        console.error(JSON.stringify({
+          requestId, stage: name, code: error instanceof AppError ? error.code : 'UNEXPECTED_GUARD_ERROR',
+          ...(error instanceof InvalidModelOutputError ? { validation: error.diagnostics } : {}),
+        }));
         throw new AppError('GUARD_UNAVAILABLE', 'A required safety check is unavailable. Try again.');
       }
     };
 
     const workflow = async (): Promise<AskResponse> => {
-      const decision = await stage('request_guard', () => guard('request_guard', () => structured(
-        requestGuardSchema, 'request_guard', requestGuardMessages(request), 900,
-      )));
-      if (decision.decision !== 'allowed') return response(decision.decision, decision.explanation);
+      const safety = await stage('request_guard', () => guard('request_guard', async () => {
+        for (const text of [request.question, ...request.history.map(message => message.content)]) {
+          if (await dependencies.evaluateSafety(text, controller.signal) !== 'safe') return 'blocked';
+        }
+        return 'safe';
+      }));
+      if (safety === 'blocked') return response('blocked', blockedAnswer);
+      const decision = request.history.length ? await stage('query_resolution', () => structured(
+        queryResolutionSchema, 'query_resolution', queryResolutionMessages(request), 900,
+      )) : { decision: 'allowed' as const, query: request.question, explanation: '' };
+      if (decision.decision !== 'allowed') {
+        const clarificationSafety = await stage('output_guard', () => guard('output_guard', () => dependencies.evaluateSafety(decision.explanation, controller.signal)));
+        return clarificationSafety === 'safe' ? response(decision.decision, decision.explanation) : response('blocked', blockedAnswer);
+      }
 
       const passages = await stage('retrieval', async () => {
         const result = z.array(citationSchema).safeParse(await dependencies.retrieve({
@@ -106,21 +123,11 @@ export function createAnswerQuestion(dependencies: AgentDependencies) {
       });
       const cited = passages.filter(passage => draft.citationIds.includes(passage.id));
       const validIds = cited.length === draft.citationIds.length;
-      const grounding = await stage('grounding_guard', () => guard('grounding_guard', () => structured(
-        groundingGuardSchema, 'grounding_guard', groundingGuardMessages(decision.query, draft, passages), 2400,
-      )));
-      if (grounding.verdict === 'blocked') return response('blocked', blockedAnswer);
-      // The semantic guard checks entailment. Local checks additionally disallow invented IDs,
-      // uncited claim support, and a supported verdict without an answered, sourced draft.
-      const supported = grounding.verdict === 'supported' && validIds && draft.status === 'answered' &&
-        cited.length > 0 && grounding.claims.every(claim => claim.supported && claim.citationIds.length > 0 &&
-          claim.citationIds.every(id => draft.citationIds.includes(id) && cited.some(passage => passage.id === id))) &&
-        cited.every(passage => grounding.claims.some(claim => claim.citationIds.includes(passage.id)));
-      if (supported) return response('answered', draft.answer, cited);
-      if (draft.status === 'blocked') return response('blocked', blockedAnswer);
-      if (draft.status === 'needs_clarification' && grounding.verdict === 'insufficient_evidence' && grounding.claims.length === 0) {
-        return response('needs_clarification', draft.answer);
-      }
+      const outputSafety = await stage('output_guard', () => guard('output_guard', () => dependencies.evaluateSafety(draft.answer, controller.signal)));
+      if (outputSafety !== 'safe' || draft.status === 'blocked') return response('blocked', blockedAnswer);
+      // Safety classification is not a factual entailment check. Reject invented source IDs locally.
+      if (draft.status === 'answered' && validIds && cited.length > 0) return response('answered', draft.answer, cited);
+      if (draft.status === 'needs_clarification') return response('needs_clarification', draft.answer);
       return response('insufficient_evidence', insufficientAnswer);
     };
 
@@ -133,4 +140,4 @@ export function createAnswerQuestion(dependencies: AgentDependencies) {
   };
 }
 
-export const answerQuestion = createAnswerQuestion({ retrieve, chatJson });
+export const answerQuestion = createAnswerQuestion({ retrieve, chatJson, evaluateSafety });

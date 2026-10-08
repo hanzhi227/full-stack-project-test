@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import { MAX_DOCUMENTS, MAX_FILE_BYTES, askRequestSchema } from '@document-qa/contracts';
 import { ingestDocument, listDocuments } from './server/documents';
+import { extractDocumentText } from './server/documents/extract';
 import { answerQuestion } from './server/agent';
 import { AppError } from './server/errors';
 import { workspaceRoute, sendApiError } from './server/http';
@@ -22,20 +23,17 @@ export function createApp(dependencies: typeof services = services) {
  });
  app.get('/api/documents', (request, reply) => workspaceRoute(request, reply, 'list', async workspaceId => ({ body: { documents: await dependencies.listDocuments(workspaceId) } })));
  app.post('/api/documents', (request, reply) => workspaceRoute(request, reply, 'upload', workspaceId => withWorkspaceLock(workspaceId, async () => {
-  if (!(request.body instanceof Buffer)) throw new AppError('INVALID_FILE', 'Choose a TXT or Markdown file.', 400, false);
+  if (!(request.body instanceof Buffer)) throw new AppError('INVALID_FILE', 'Choose a PDF, TXT or Markdown file.', 400, false);
   let form: FormData;
   try { form = await new Request('http://localhost/upload', { method: 'POST', headers: { 'Content-Type': request.headers['content-type']! }, body: new Blob([new Uint8Array(request.body)]) }).formData(); }
   catch { throw new AppError('INVALID_FILE', 'The upload could not be read. Choose a file and try again.', 400, false); }
   const entries = [...form.entries()]; const file = form.get('file');
-  if (entries.length !== 1 || !(file instanceof File) || !/\.(txt|md)$/i.test(file.name)) throw new AppError('INVALID_FILE', 'Choose one TXT or Markdown file.', 400, false);
-  if (file.size > MAX_FILE_BYTES) throw new AppError('FILE_TOO_LARGE', 'Files must be no larger than 1 MB.', 413, false);
+  if (entries.length !== 1 || !(file instanceof File) || !/\.(pdf|txt|md)$/i.test(file.name)) throw new AppError('INVALID_FILE', 'Choose one PDF, TXT or Markdown file.', 400, false);
+  if (file.size > MAX_FILE_BYTES) throw new AppError('FILE_TOO_LARGE', 'Files must be no larger than 50 MB.', 413, false);
   const name = file.name.normalize('NFC').replace(/[\x00-\x1f\x7f/\\]/g, '_');
   if (name.length > 200) throw new AppError('INVALID_FILE', 'The filename must be no longer than 200 characters.', 400, false);
-  let text: string;
-  try { text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer()); }
-  catch { throw new AppError('INVALID_ENCODING', 'Save the document as UTF-8 text and try again.', 400, false); }
-  if (!text.trim() || text.includes('\0')) throw new AppError('EMPTY_DOCUMENT', 'Choose a non-empty text document.', 400, false);
   if ((await dependencies.listDocuments(workspaceId)).length >= MAX_DOCUMENTS) throw new AppError('DOCUMENT_LIMIT', 'This session already has five documents.', 409, false);
+  const text = await extractDocumentText(file);
   const document = await dependencies.ingestDocument({ workspaceId, name, text });
   return { status: 201, body: { document } };
  })));

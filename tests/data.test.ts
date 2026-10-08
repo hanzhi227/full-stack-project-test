@@ -285,9 +285,10 @@ test('MilvusVectorStore surfaces non-success SDK status as sanitized retryable a
  const store = new MilvusVectorStore(client, 'test_collection');
  await assert.rejects(store.info(), (error: unknown) => error instanceof AppError && error.code === 'VECTOR_STORE_UNAVAILABLE' && error.retryable && !error.message.includes('private'));
 });
-test('chunkText admits maximum-size ASCII files with dense paragraph boundaries within the chunk cap', () => {
- const text = ('a'.repeat(2559) + '\n\n').repeat(400).slice(0, MAX_FILE_BYTES);
- assert.equal(Buffer.byteLength(text), MAX_FILE_BYTES);
+test('chunkText admits 1 MB of dense paragraphs but retains a separate indexing complexity cap', () => {
+ assert.throws(() => chunkText('a'.repeat(MAX_FILE_BYTES)), code('DOCUMENT_TOO_COMPLEX'));
+ const text = ('a'.repeat(2559) + '\n\n').repeat(400).slice(0, 1_000_000);
+ assert.equal(Buffer.byteLength(text), 1_000_000);
  const chunks = chunkText(text);
  assert.ok(chunks.length <= MAX_CHUNKS);
  assert.ok(chunks.every(chunk => chunk.text.length <= CHUNK_CHARACTERS));

@@ -3,6 +3,7 @@ import { AppError } from '../errors';
 // Character approximation of 800 tokens / 120 overlap; no provider tokenizer is assumed.
 export const CHUNK_CHARACTERS = 3200;
 export const CHUNK_OVERLAP = 480;
+// shortcut: synchronous ingestion is capped at 512 chunks; use background jobs before raising it.
 export const MAX_CHUNKS = 512;
 export type TextChunk = { text: string; startLine: number; endLine: number; chunkIndex: number };
 
@@ -20,7 +21,7 @@ export function chunkText(text: string): TextChunk[] {
  for (let start = 0; start < text.length;) {
   let end = Math.min(start + CHUNK_CHARACTERS, text.length);
   if (end < text.length) {
-   // At least 2080 characters of progress keeps any 1 MB file under the chunk cap.
+   // Prefer boundaries in the final 20% so each chunk still makes substantial progress.
    const minimum = start + Math.floor(CHUNK_CHARACTERS * 0.8);
    // Prefer paragraph/heading boundaries, then lines, then words.
    const tail = text.slice(minimum, end);

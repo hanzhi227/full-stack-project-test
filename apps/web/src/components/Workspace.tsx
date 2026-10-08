@@ -178,7 +178,7 @@ export function Workspace() {
               className="sr-only"
               id="document-upload"
               type="file"
-              accept=".txt,.md,text/plain,text/markdown"
+              accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown"
               aria-label="Upload document"
               aria-describedby="upload-hint"
               tabIndex={-1}
@@ -194,7 +194,7 @@ export function Workspace() {
             >
               Upload document
             </button>
-            <p className="helper-text" id="upload-hint">TXT or Markdown · up to 1 MB per file · up to 5 documents</p>
+            <p className="helper-text" id="upload-hint">PDF, TXT or Markdown · up to 50 MB per file · up to 5 documents</p>
 
             {state.loadingDocuments && <p className="loading-text">Loading documents…</p>}
             {state.listError && (

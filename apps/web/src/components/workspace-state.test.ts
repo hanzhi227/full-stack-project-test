@@ -123,11 +123,12 @@ test('Start new conversation clears questions and memory without losing document
   assert.equal(reset.announcement, 'Conversation cleared. Your documents are still available.');
 });
 
-test('upload validation enforces TXT/Markdown, 1 MB and five-document contract', () => {
+test('upload validation enforces PDF/TXT/Markdown, 50 MB and five-document contract', () => {
   assert.equal(validateUpload({ name: 'Handbook.MD', size: 1_000_000 }, 4), null);
   assert.equal(validateUpload({ name: 'Guide.txt', size: 1 }, 0), null);
-  assert.match(validateUpload({ name: 'Guide.pdf', size: 10 }, 0)!, /TXT or Markdown/);
+  assert.equal(validateUpload({ name: 'Guide.PDF', size: 50_000_000 }, 0), null);
+  assert.match(validateUpload({ name: 'Guide.docx', size: 10 }, 0)!, /PDF, TXT or Markdown/);
   assert.match(validateUpload({ name: 'Guide.txt', size: 0 }, 0)!, /empty/);
-  assert.match(validateUpload({ name: 'Guide.txt', size: 1_000_001 }, 0)!, /exceeds 1 MB/);
+  assert.match(validateUpload({ name: 'Guide.txt', size: 50_000_001 }, 0)!, /exceeds 50 MB/);
   assert.match(validateUpload({ name: 'Guide.txt', size: 10 }, 5)!, /5 documents/);
 });

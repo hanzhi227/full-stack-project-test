@@ -3,18 +3,19 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createApp } from '../apps/api/src/app';
 import { AppError } from '../apps/api/src/server/errors';
-import type { DocumentSummary } from '@document-qa/contracts';
+import { MAX_FILE_BYTES, type DocumentSummary } from '@document-qa/contracts';
+import { pdfFixture } from './pdf-fixture';
 process.env.SESSION_SIGNING_SECRET = 'api-test-secret-not-for-production'.repeat(2);
 process.env.APP_ORIGIN = 'http://localhost:3000';
 const origin = process.env.APP_ORIGIN;
 function fixture() {
- const documents = new Map<string, DocumentSummary[]>(); let answers = 0;
+ const documents = new Map<string, DocumentSummary[]>(); const texts: string[] = []; let answers = 0;
  const app = createApp({
   listDocuments: async workspace => documents.get(workspace) ?? [],
-  ingestDocument: async ({workspaceId, name}) => { const document={id:randomUUID(),name,chunkCount:1}; documents.set(workspaceId,[...documents.get(workspaceId)??[],document]); return document; },
+  ingestDocument: async ({workspaceId, name, text}) => { texts.push(text); const document={id:randomUUID(),name,chunkCount:1}; documents.set(workspaceId,[...documents.get(workspaceId)??[],document]); return document; },
   answerQuestion: async () => { answers++; return {status:'answered',answer:'Keep the receipt.',citations:[],requestId:randomUUID()}; }
  });
- return {app,documents,answers:()=>answers};
+ return {app,documents,texts,answers:()=>answers};
 }
 async function multipart(bytes: Uint8Array|string, name='handbook.md') {
  const form=new FormData(); form.set('file',new File([typeof bytes==='string' ? bytes : new Uint8Array(bytes)],name));
@@ -55,11 +56,21 @@ test('Fastify enforces actual body sizes, format and UTF-8 before ingestion',asy
  const {app,documents}=fixture(); t.after(()=>app.close());
  const oversized=await app.inject({method:'POST',url:'/api/ask',headers:{origin,'content-type':'application/json'},payload:'x'.repeat(64_001)});
  assert.equal(oversized.statusCode,413); assert.equal(oversized.json().error.code,'REQUEST_TOO_LARGE');
- for(const [bytes,name,code] of [[new Uint8Array([255]),'bad.txt','INVALID_ENCODING'],['','empty.md','EMPTY_DOCUMENT'],['Text','file.pdf','INVALID_FILE'],['x'.repeat(1_000_001),'big.txt','FILE_TOO_LARGE']] as const){
+ for(const [bytes,name,code] of [[new Uint8Array([255]),'bad.txt','INVALID_ENCODING'],['','empty.md','EMPTY_DOCUMENT'],['Text','file.pdf','INVALID_FILE'],['Text','file.docx','INVALID_FILE'],[pdfFixture(''),'blank.pdf','EMPTY_DOCUMENT'],['%PDF-1.4\ninvalid','broken.pdf','INVALID_FILE'],['x'.repeat(MAX_FILE_BYTES + 1),'big.txt','FILE_TOO_LARGE']] as const){
   const result=await app.inject({method:'POST',url:'/api/documents',...await multipart(bytes,name)});
   assert.equal(result.json().error.code,code);
  }
  assert.equal(documents.size,0);
+});
+test('Fastify extracts real PDFs and accepts the exact 50 MB upload boundary', async t => {
+ const {app,texts}=fixture(); t.after(()=>app.close());
+ const pdf=await app.inject({method:'POST',url:'/api/documents',...await multipart(pdfFixture(),'Guide.PDF')});
+ assert.equal(pdf.statusCode,201);
+ assert.equal(pdf.json().document.name,'Guide.PDF');
+ assert.equal(texts[0].trim(),'Keep the receipt.');
+ const large=await app.inject({method:'POST',url:'/api/documents',...await multipart('x'.repeat(MAX_FILE_BYTES),'big.txt')});
+ assert.equal(large.statusCode,201);
+ assert.equal(texts[1].length,MAX_FILE_BYTES);
 });
 test('guard/provider outages map to retryable JSON rather than returning an answer',async t=>{
  const id=randomUUID();

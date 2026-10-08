@@ -1,5 +1,5 @@
 import { z } from 'zod';
-export const MAX_FILE_BYTES = 1_000_000;
+export const MAX_FILE_BYTES = 50_000_000;
 export const MAX_DOCUMENTS = 5;
 export const documentSummarySchema = z.object({ id: z.string().uuid(), name: z.string(), chunkCount: z.number().int().positive() });
 export const citationSchema = z.object({ id: z.string(), documentId: z.string().uuid(), documentName: z.string(), excerpt: z.string(), startLine: z.number().int().positive(), endLine: z.number().int().positive() });
