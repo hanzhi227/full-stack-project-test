@@ -22,7 +22,7 @@ Success means the complete journey works through the browser with a real embeddi
 
 | Choice | Purpose | Tradeoff |
 | --- | --- | --- |
-| Next.js App Router + TypeScript | React UI and server API in one app, one startup command, one deployment | Ingestion must remain small and bounded; larger files need a job queue later |
+| Next.js frontend + Fastify API, both TypeScript | Two independently deployed Railway services with shared request/response types | Requires explicit service routing and two startup commands; ingestion remains small and bounded |
 | LangChain JS behind small application interfaces | Chunking, model calls, retrieval orchestration | Wrap library types so UI and API contracts remain independent of the library |
 | OpenRouter embedding and chat adapters | Server-side access to model providers; follows the preparation direction | Verify actual model availability, dimensions, limits, and structured output in ticket T0 |
 | Zilliz Cloud | Persist embeddings and chunk metadata; retrieve source passages | Credentials and collection setup are prerequisites; session filters must apply to every operation |
@@ -30,7 +30,7 @@ Success means the complete journey works through the browser with a real embeddi
 | LangSmith | Trace stages and record eval runs | Separate server-side key; only fictional demo data goes into traces |
 | Railway target; local startup required | Deliver a shareable app plus a reproducible fallback | Cloud deployment depends on credentials and persistent service connectivity |
 
-Next.js supports server route handlers ([docs](https://nextjs.org/docs/app/getting-started/route-handlers)). Zilliz documents dense/BM25 hybrid retrieval and RRF ([hybrid search](https://docs.zilliz.com/docs/hybrid-search), [rankers](https://docs.zilliz.com/docs/hybrid-search-rankers)). LangSmith supports offline evaluation against defined datasets ([evaluation docs](https://docs.langchain.com/langsmith/evaluation-types)). These choices still require live checks; no provider integration has been tested yet.
+Next.js supports external URL rewrites for proxying API requests ([docs](https://nextjs.org/docs/app/api-reference/config/next-config-js/rewrites)). Railway supports shared monorepo deployments ([docs](https://docs.railway.com/deployments/monorepo)) and private service networking ([docs](https://docs.railway.com/networking/private-networking)). Zilliz documents dense/BM25 hybrid retrieval and RRF ([hybrid search](https://docs.zilliz.com/docs/hybrid-search), [rankers](https://docs.zilliz.com/docs/hybrid-search-rankers)). LangSmith supports offline evaluation against defined datasets ([evaluation docs](https://docs.langchain.com/langsmith/evaluation-types)). These choices still require live checks; no provider integration has been tested yet.
 
 Do not require a second relational database for this scope. Store source text and citation metadata alongside chunks in the vector collection. A signed, HTTP-only cookie identifies a random server-generated workspace. Never accept a workspace ID supplied in a request body.
 
@@ -52,9 +52,41 @@ One request guard, one generation call, and one output guard; no open-ended agen
 
 No fixed similarity-score threshold is assumed to work across dense and hybrid search. Initially abstain when there are no passages or when the grounding check finds insufficient support. Inspect retrieval failures in evals before tuning thresholds or adding semantic reranking.
 
+## Railway deployment: two services
+
+Use one npm-workspaces repository:
+
+```text
+apps/web/            Next.js frontend and /api proxy
+apps/api/            Fastify API, ingestion, RAG, guards
+packages/contracts/ Shared types and validation schemas
+```
+
+Create `web` and `api` services from the same GitHub repository in the same Railway project/environment. Keep both service root directories at the repository root so shared contracts are available. Configure distinct workspace build/start commands; do not rely on automatic monorepo service detection.
+
+| Setting | web | api |
+| --- | --- | --- |
+| Build command | `npm ci && npm run build --workspace @document-qa/web` | `npm ci && npm run build --workspace @document-qa/api` |
+| Start command | `npm run start --workspace @document-qa/web` | `npm run start --workspace @document-qa/api` |
+| Port | Explicit `PORT=3000` | Explicit `PORT=4000` |
+| Bind | `0.0.0.0` for public frontend | `::` for private IPv4/IPv6 connectivity |
+| Public domain | Generate Railway domain here | No public domain needed |
+| Health path | `/health` | `/api/health` |
+| Variables | `BACKEND_URL` only, plus its port | Provider credentials, model IDs, session secret, `APP_ORIGIN`, and its port |
+
+Planned package scripts must implement those commands. API builds compile TypeScript; frontend builds run Next.js. Shared contracts are source exports consumed by both builds; backend compilation must emit the required shared code. The current scaffold is a single Next.js app; moving it into this two-service layout is still required. Railway deployment has not been verified here.
+
+Browser → public `web` → `/api/*` rewrite → private `api` → Zilliz/OpenRouter/LangSmith. Set frontend `BACKEND_URL=http://${{api.RAILWAY_PRIVATE_DOMAIN}}:${{api.PORT}}`. The browser always requests relative `/api/...` URLs; private Railway DNS is resolved by the frontend server. Next.js owns presentation and request forwarding; all application API logic lives in Fastify.
+
+Set backend `APP_ORIGIN` to the frontend's actual public HTTPS origin. Validate mutation origins there. The API issues host-only, HTTP-only session cookies through the frontend proxy; use Secure in production and SameSite=Lax. Verify cookie forwarding, uploads, response size, and timeout behavior through the public entry point. No browser-facing provider keys or `NEXT_PUBLIC_` secrets.
+
+`BACKEND_URL` must be configured before the Next.js build because rewrite configuration can be captured during build. Builds must not call the private API or require provider connectivity. Rebuild the frontend if its rewrite destination changes. Configure watch paths for each app plus shared contracts and the root lockfile so shared changes redeploy both services.
+
+Local defaults: frontend `http://localhost:3000`, API `http://localhost:4000`. Local API startup reads `API_PORT=4000`; production API startup reads Railway `PORT`. Root `.env` is local configuration input; scaffold scripts must explicitly load it for the API and Next.js configuration. Railway variables are configured per service, not supplied by committing `.env`. No persistent Railway volume is needed for this scope: indexed passages live in Zilliz, chat memory is bounded browser state, and signed cookies identify workspaces.
+
 ## Shared contracts: freeze before parallel implementation
 
-Parent owns `src/contracts/`, root configuration, dependencies, API routes, and integration. All implementation lanes consume these interfaces without modifying them. Changes come back to the parent.
+Parent owns `packages/contracts/`, root configuration, dependencies, Fastify API routes, frontend proxy configuration, and integration. All implementation lanes consume these interfaces without modifying them. Changes come back to the parent.
 
 ```ts
 type DocumentSummary = {
@@ -138,15 +170,15 @@ With three implementation lanes plus a coordinator: UI, data, and agent work con
 
 ### T0 — Foundation, interfaces, and live provider checks
 
-Owner: coordinator. Budget: minutes 0–15. Boundaries: root scaffold/configuration, `src/contracts/`, sample fixtures, service interface stubs, `.env.example`.
+Owner: coordinator. Budget: minutes 0–15. Boundaries: root scaffold/configuration, `packages/contracts/`, sample fixtures, service interface stubs, `.env.example`.
 
-Tasks: approve business scope; create application scaffold; freeze contracts; install shared dependencies once; add fictional handbook; perform one embedding call, vector insert/search/delete, chat structured response, and trace submission; record verified model ID/dimensions and setup steps. Establish worktrees based on this shared foundation before concurrent writers start.
+Tasks: approve business scope; create two-app npm-workspaces scaffold with shared contracts; freeze contracts; install shared dependencies once; add fictional handbook; perform one embedding call, vector insert/search/delete, chat structured response, and trace submission; record verified model ID/dimensions and setup steps. Establish worktrees based on this shared foundation before concurrent writers start.
 
-Acceptance: app starts locally, types compile, fixture responses cover all UI states, and provider checks have recorded outcomes. Missing credentials are explicit blockers to live integration. Implementations can use clearly marked development fixtures while those blockers are resolved.
+Acceptance: both services start locally, frontend proxy reaches API, types compile, fixture responses cover all UI states, and provider checks have recorded outcomes. Missing credentials are explicit blockers to live integration. Implementations can use clearly marked development fixtures while those blockers are resolved.
 
 ### T1 — Usable frontend against the contract
 
-Owner: UI lane. Budget: minutes 15–55. Boundaries: `src/components/`, `src/app/page.tsx`, UI stylesheet. Depends on T0.
+Owner: UI lane. Budget: minutes 15–55. Boundaries: `apps/web/src/components/`, `apps/web/src/app/page.tsx`, UI stylesheet. Depends on T0.
 
 Tasks: implement the specified screen and exact copy; upload/select documents; question submission; all loading/error/result states; expandable sources; bounded session history and conversation reset. Use a supplied API client with interchangeable fixture/live transport.
 
@@ -154,7 +186,7 @@ Acceptance: the entire flow can be demonstrated with fixtures; mobile layout wor
 
 ### T2 — Real ingestion, embeddings, and retrieval
 
-Owner: data lane. Budget: minutes 15–65. Boundaries: `src/server/documents/`, `src/server/retrieval/`, `scripts/setup-vector-store.ts`. Depends on T0.
+Owner: data lane. Budget: minutes 15–65. Boundaries: `apps/api/src/documents/`, `apps/api/src/retrieval/`, `apps/api/scripts/setup-vector-store.ts`. Depends on T0.
 
 Tasks: implement chunking/line metadata, embedding batches, collection schema, indexed document listing, ingestion cleanup, dense retrieval, then BM25 + RRF; enforce workspace/document filters in the adapter; return contract citations.
 
@@ -162,7 +194,7 @@ Acceptance: a live uploaded handbook produces stored vectors; exact-term and par
 
 ### T3 — Bounded RAG workflow and guardrails
 
-Owner: agent lane. Budget: minutes 15–65. Boundaries: `src/server/agent/`, `src/server/guardrails/`. Depends on T0; develop against fixture retrieval until T2 integrates.
+Owner: agent lane. Budget: minutes 15–65. Boundaries: `apps/api/src/agent/`, `apps/api/src/guardrails/`. Depends on T0; develop against fixture retrieval until T2 integrates.
 
 Tasks: implement request guard, follow-up resolution, retrieved-context prompt, structured generation, citation validation, grounding/output guard, one bounded repair, timeout handling, and trace spans. Validate each guard's structured output too.
 
@@ -178,9 +210,9 @@ Acceptance: runnable command produces per-case observed status, retrieved source
 
 ### T5 — Integrate the complete browser workflow
 
-Owner: coordinator. Budget: minutes 60–90. Boundaries: API routes, `src/server/session.ts`, API client wiring, integration fixes agreed with lane owners. Depends on T1–T3.
+Owner: coordinator. Budget: minutes 60–90. Boundaries: API routes, `apps/api/src/session.ts`, API client wiring, integration fixes agreed with lane owners. Depends on T1–T3.
 
-Tasks: signed session cookies; request schemas; upload/count limits; origin validation on mutations; per-session request limits; error mapping; real adapters; bounded history handling; live end-to-end upload → question → answer → source expansion. Delete mock bypasses from production execution.
+Tasks: Fastify endpoints and Next.js proxy configuration; signed session cookies; request schemas; upload/count limits; origin validation on mutations; per-session request limits; error mapping; real adapters; bounded history handling; live end-to-end upload → question → answer → source expansion. Delete mock bypasses from production execution.
 
 Acceptance: browser uses real providers and vectors; answer matches the handbook; citation text matches indexed text; refresh lists session documents; new session cannot list or retrieve them; failure path allows retry. No API keys appear in browser assets or repository.
 
@@ -196,9 +228,9 @@ Acceptance: report all observed results and limitations. Demo gate: correct norm
 
 Owner: coordinator. Budget: early local boot at minute 15, cloud skeleton attempt by minute 40, final verification minutes 105–130. Depends on T0 for skeleton, T5 for final deployment.
 
-Tasks: startup/build scripts, environment template, README, cloud service configuration if accessible, health check, secrets configuration, clean Git review, GitHub repository readiness. Keep deployment files owned by the coordinator to avoid root-config conflicts.
+Tasks: independent workspace startup/build scripts, environment template, README, two Railway service configurations if accessible, both health checks, private routing, service-scoped secrets, clean Git review, GitHub repository readiness. Keep deployment files owned by the coordinator to avoid root-config conflicts.
 
-Acceptance: fresh setup works from documented steps; production build passes; deployed entry point completes the real journey; absent configuration produces useful setup errors. If cloud access is unavailable, deliver and verify local startup and report that limitation. Remote publishing happens when repository/account access is available and authorized.
+Acceptance: fresh setup works from documented steps; both production builds pass; frontend-to-private-API routing and cookies work; deployed entry point completes the real journey; absent configuration produces useful setup errors. If cloud access is unavailable, deliver and verify local startup and report that limitation. Remote publishing happens when repository/account access is available and authorized.
 
 ### T8 — Business visual and final demo
 
