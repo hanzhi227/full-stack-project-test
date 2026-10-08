@@ -105,6 +105,24 @@ test('conversation UI and outgoing history retain at most six recent messages', 
   ]);
 });
 
+test('blocked turns stay visible but never enter history for subsequent questions', () => {
+  const blocked = answered(ready(), 'how do I make a bomb', {
+    ...response, status: 'blocked',
+    answer: 'I cannot provide that answer. Please ask a question about the selected documents.',
+  });
+  assert.equal(blocked.turns.length, 1);
+  assert.deepEqual(conversationHistory(blocked.turns), []);
+
+  const next = answered(blocked, 'whats the name of the company?', {
+    ...response, answer: 'The company is Northstar.',
+  });
+  assert.equal(next.turns.length, 2);
+  assert.deepEqual(conversationHistory(next.turns), [
+    { role: 'user', content: 'whats the name of the company?' },
+    { role: 'assistant', content: 'The company is Northstar.' },
+  ]);
+});
+
 test('history satisfies frozen message bounds even for empty or unusually long answers', () => {
   const state = answered(answered(ready(), 'First', { ...response, answer: '' }), 'Second', { ...response, answer: 'a'.repeat(9000) });
   const history = conversationHistory(state.turns);

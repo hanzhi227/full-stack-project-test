@@ -42,7 +42,7 @@ export const answerStatusLabels: Record<AskResponse['status'], string> = {
 };
 
 export function conversationHistory(turns: ConversationTurn[]): AskRequest['history'] {
-  return turns.flatMap(turn => [
+  return turns.filter(turn => turn.response.status !== 'blocked').flatMap(turn => [
     { role: 'user' as const, content: turn.question },
     { role: 'assistant' as const, content: turn.response.answer },
   ]).filter(message => message.content.trim().length > 0)
