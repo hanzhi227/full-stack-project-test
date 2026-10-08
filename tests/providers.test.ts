@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { z } from 'zod';
-import { AppError } from '../src/server/errors';
-import { chatJson, embedTexts } from '../src/server/providers/openrouter';
+import { AppError } from '../apps/api/src/server/errors';
+import { chatJson, embedTexts } from '../apps/api/src/server/providers/openrouter';
 
 const schema = z.object({ safe: z.boolean() }).strict();
 const chatInput = {

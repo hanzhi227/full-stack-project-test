@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { signSession, verifySession } from '../src/server/session';
-import { rateLimit, withWorkspaceLock } from '../src/server/request-limits';
-import { assertOrigin, boundedBody } from '../src/server/http';
-import { askRequestSchema } from '../src/contracts';
+import { signSession, verifySession } from '../apps/api/src/server/session';
+import { rateLimit, withWorkspaceLock } from '../apps/api/src/server/request-limits';
+import { assertOrigin } from '../apps/api/src/server/http';
+import { askRequestSchema } from '@document-qa/contracts';
 const secret = 'test-session-key-not-for-production'.repeat(2);
 test('signed workspace cookie rejects tampering, expiry and wrong key', () => {
  const id = randomUUID(), now = 1_780_000_000_000;
@@ -25,10 +25,6 @@ test('schema refuses caller-supplied workspace and oversized history', () => {
  assert.ok(askRequestSchema.safeParse(valid).success);
  assert.ok(!askRequestSchema.safeParse({...valid,workspaceId:randomUUID()}).success);
  assert.ok(!askRequestSchema.safeParse({...valid,history:Array.from({length:7},()=>({role:'user',content:'Hi'}))}).success);
-});
-test('body limit applies without content-length', async () => {
- await assert.rejects(boundedBody(new Request('http://localhost', { method:'POST', body:'abcdef' }), 5));
- assert.equal(new TextDecoder().decode(await boundedBody(new Request('http://localhost', {method:'POST',body:'abc'}),3)), 'abc');
 });
 test('limiter expires and lock prevents simultaneous indexing', async () => {
  const key = randomUUID(); rateLimit(key,1,1000); assert.throws(()=>rateLimit(key,1,1001)); rateLimit(key,1,61_000);

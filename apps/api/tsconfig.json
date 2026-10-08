@@ -1,0 +1,3 @@
+{
+ "compilerOptions":{"target":"ES2022","lib":["es2022","dom","dom.iterable"],"module":"CommonJS","moduleResolution":"Node","strict":true,"skipLibCheck":true,"esModuleInterop":true,"outDir":"dist","rootDir":"src"},"include":["src/**/*.ts"]
+}

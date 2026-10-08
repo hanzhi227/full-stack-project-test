@@ -1,6 +1,6 @@
-import { embedTexts, chatJson } from '../src/server/providers/openrouter';
+import { embedTexts, chatJson } from '../apps/api/src/server/providers/openrouter';
 import { z } from 'zod';
-import { traceStage } from '../src/server/tracing';
+import { traceStage } from '../apps/api/src/server/tracing';
 async function main() {
  const results: Record<string, unknown> = {};
  for (const [name, run] of Object.entries({

@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { FunctionType, type ResStatus } from '@zilliz/milvus2-sdk-node';
-import { AppError } from '../src/server/errors';
-import { embedTexts } from '../src/server/providers/openrouter';
-import { createDocumentService } from '../src/server/documents';
-import { createRetrievalService } from '../src/server/retrieval';
-import { checkStatus, collectionFields, collectionName, createMilvusClient, MilvusVectorStore, validateCollection } from '../src/server/retrieval/vector-store';
+import { AppError } from '../apps/api/src/server/errors';
+import { embedTexts } from '../apps/api/src/server/providers/openrouter';
+import { createDocumentService } from '../apps/api/src/server/documents';
+import { createRetrievalService } from '../apps/api/src/server/retrieval';
+import { checkStatus, collectionFields, collectionName, createMilvusClient, MilvusVectorStore, validateCollection } from '../apps/api/src/server/retrieval/vector-store';
 
 export type SetupResult = { collection: string; dimension: number; strategy: 'dense' | 'hybrid'; created: boolean; denseFallbackReason?: string };
 function succeeded(status: ResStatus): boolean { return [0, '0', 'Success'].includes(status.error_code) && !status.code; }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { citationMatchesSource } from '../evals/citations';
-import type { Citation } from '../src/contracts';
+import type { Citation } from '@document-qa/contracts';
 
 const citation: Citation = {
  id: 'chunk', documentId: 'd137d2b3-7eeb-4aeb-b0ea-17f4c887f4a0', documentName: 'Handbook.md',

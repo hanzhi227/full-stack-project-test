@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { DataType, FunctionType, type DescribeCollectionResponse } from '@zilliz/milvus2-sdk-node';
-import { MAX_FILE_BYTES } from '../src/contracts';
-import { AppError } from '../src/server/errors';
-import { chunkText, CHUNK_CHARACTERS, CHUNK_OVERLAP, MAX_CHUNKS } from '../src/server/documents/chunking';
-import { createDocumentService, readyDocuments } from '../src/server/documents';
-import { createRetrievalService, MAX_CONTEXT_CHARACTERS } from '../src/server/retrieval';
-import { collectionFields, MilvusVectorStore, validateCollection, workspaceFilter, type ChunkMetadata, type InsertChunk, type StoredChunk, type VectorStore } from '../src/server/retrieval/vector-store';
+import { MAX_FILE_BYTES } from '@document-qa/contracts';
+import { AppError } from '../apps/api/src/server/errors';
+import { chunkText, CHUNK_CHARACTERS, CHUNK_OVERLAP, MAX_CHUNKS } from '../apps/api/src/server/documents/chunking';
+import { createDocumentService, readyDocuments } from '../apps/api/src/server/documents';
+import { createRetrievalService, MAX_CONTEXT_CHARACTERS } from '../apps/api/src/server/retrieval';
+import { collectionFields, MilvusVectorStore, validateCollection, workspaceFilter, type ChunkMetadata, type InsertChunk, type StoredChunk, type VectorStore } from '../apps/api/src/server/retrieval/vector-store';
 
 const workspaceId = randomUUID();
 const documentId = randomUUID();

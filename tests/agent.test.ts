@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Citation } from '../src/contracts';
-import { createAnswerQuestion } from '../src/server/agent';
-import { AppError } from '../src/server/errors';
-import type { chatJson } from '../src/server/providers/openrouter';
-import { draftSchema, groundingGuardSchema, requestGuardSchema } from '../src/server/guardrails';
+import type { Citation } from '@document-qa/contracts';
+import { createAnswerQuestion } from '../apps/api/src/server/agent';
+import { AppError } from '../apps/api/src/server/errors';
+import type { chatJson } from '../apps/api/src/server/providers/openrouter';
+import { draftSchema, groundingGuardSchema, requestGuardSchema } from '../apps/api/src/server/guardrails';
 
 const documentId = 'a7a36b19-80e3-466b-9a7d-112fcf107147';
 const input = { workspaceId: 'verified-workspace', question: 'What is needed for reimbursement?', documentIds: [documentId], history: [] };

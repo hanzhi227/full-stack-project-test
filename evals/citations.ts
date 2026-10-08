@@ -1,4 +1,4 @@
-import type { Citation } from '../src/contracts';
+import type { Citation } from '@document-qa/contracts';
 
 export function citationMatchesSource(citation: Citation, source: string): boolean {
  const lines = source.split('\n');

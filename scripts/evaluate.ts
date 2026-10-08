@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { cases } from '../evals/cases';
 import { citationMatchesSource } from '../evals/citations';
-import { askResponseSchema, type ApiError, type AskResponse, type DocumentSummary } from '../src/contracts';
+import { askResponseSchema, type ApiError, type AskResponse, type DocumentSummary } from '@document-qa/contracts';
 const base = process.env.EVAL_BASE_URL ?? 'http://localhost:3000';
 class BrowserSession {
  cookie = '';
