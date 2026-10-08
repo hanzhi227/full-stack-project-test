@@ -66,9 +66,8 @@ export function createDocumentService(store: VectorStore, embed: Embedder) {
     }
     const stored = await store.queryChunks(input.workspaceId, [documentId]);
     if (stored.length !== chunks.length || new Set(stored.map(row => row.chunkIndex)).size !== chunks.length || stored.some(row => row.chunkIndex >= chunks.length || row.expectedChunkCount !== chunks.length)) throw new AppError('INCOMPLETE_INSERT', 'The document was not fully indexed. Try again.');
+    const document: DocumentSummary = { id: documentId, name: input.name.trim(), chunkCount: chunks.length };
     await store.commitChunk(first!);
-    const document = readyDocuments(await store.queryChunks(input.workspaceId, [documentId]))[0];
-    if (!document) throw new AppError('INCOMPLETE_INSERT', 'The document was not fully indexed. Try again.');
     return document;
    } catch (error) {
     if (insertionAttempted) {

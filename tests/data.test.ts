@@ -112,6 +112,37 @@ test('ingestDocument batches vectors, hides pending records, commits, lists and 
  await service.rollbackDocument(workspaceId, result.id);
  assert.deepEqual(store.rows, [other]);
 });
+test('ingestDocument returns its verified summary after acknowledged commit without querying or deleting again', async () => {
+ const store = new MemoryStore(); store.failCleanup = true;
+ const queryChunks = store.queryChunks.bind(store);
+ const commitChunk = store.commitChunk.bind(store);
+ let committed = false;
+ let queryCalls = 0;
+ let postCommitQueries = 0;
+ store.queryChunks = async (workspace, ids) => {
+  queryCalls++;
+  if (committed) { postCommitQueries++; throw new Error('simulated post-commit query outage'); }
+  return queryChunks(workspace, ids);
+ };
+ store.commitChunk = async row => { await commitChunk(row); committed = true; };
+ const text = 'A'.repeat(90_000);
+ const result = await createDocumentService(store, embed).ingestDocument({ workspaceId, name: ' Handbook.md ', text });
+ assert.equal(committed, true);
+ assert.deepEqual(result, { id: store.rows[0].documentId, name: 'Handbook.md', chunkCount: chunkText(text).length });
+ assert.deepEqual(readyDocuments(store.rows), [result]);
+ assert.equal(queryCalls, 2);
+ assert.equal(postCommitQueries, 0);
+ assert.deepEqual(store.deletes, []);
+});
+test('ingestDocument still cleans up an uncertain commit that persists before rejecting', async () => {
+ const store = new MemoryStore();
+ const commitChunk = store.commitChunk.bind(store);
+ store.commitChunk = async row => { await commitChunk(row); throw new Error('simulated lost commit acknowledgement'); };
+ await assert.rejects(createDocumentService(store, embed).ingestDocument({ workspaceId, name: 'Policy.txt', text: 'Keep receipts' }), code('INGEST_FAILED'));
+ assert.equal(store.deletes.length, 1);
+ assert.equal(store.deletes[0].workspaceId, workspaceId);
+ assert.deepEqual(store.rows, []);
+});
 test('ingestDocument removes uncertain partial insert, preserves other workspace, and never lists it ready', async () => {
  const store = new MemoryStore(); store.failInsertAt = 2;
  const other = record({ workspaceId: randomUUID() }); store.rows.push(other);
