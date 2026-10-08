@@ -16,9 +16,9 @@ try {
  await page.clock.install();
  await page.clock.pauseAt(new Date());
  const question = page.getByLabel('What would you like to know?');
- const progress = page.locator('.answer-progress');
+ const progress = page.locator('.answer-card--pending');
  async function checkLabel(label) {
-  await page.waitForFunction(expected => document.querySelector('.answer-progress__label')?.textContent === expected, label);
+  await page.waitForFunction(expected => document.querySelector('.answer-card--pending [role="status"]')?.textContent === expected, label);
  }
  async function complete() {
   assert.ok(pendingRoute, 'The mocked answer request must be pending');
@@ -26,8 +26,17 @@ try {
   pendingRoute = undefined;
   await progress.waitFor({ state: 'detached' });
  }
+ await question.press('Enter');
+ assert.equal(await question.inputValue(), '');
+ assert.equal(pendingRoute, undefined);
  await question.fill('What does the handbook say?');
- await page.getByRole('button', { name: 'Ask', exact: true }).click();
+ await question.press('Shift+Enter');
+ assert.equal(await question.inputValue(), 'What does the handbook say?\n');
+ assert.equal(pendingRoute, undefined);
+ const submitted = page.waitForRequest('**/api/ask');
+ await question.press('Enter');
+ assert.equal((await submitted).postDataJSON().question, 'What does the handbook say?');
+ await page.clock.runFor(1);
  await checkLabel('Thinking through your question…');
  await page.clock.runFor(2500);
  await checkLabel('Fetching relevant sources…');
@@ -53,7 +62,14 @@ try {
   };
  });
  await question.fill('Ask again');
- await page.getByRole('button', { name: 'Ask', exact: true }).click();
+ await question.evaluate(element => {
+  const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, isComposing: true });
+  element.dispatchEvent(event);
+  if (event.defaultPrevented) throw new Error('Composing Enter must not be intercepted');
+ });
+ assert.equal(pendingRoute, undefined);
+ await question.press('Enter');
+ await page.clock.runFor(1);
  await checkLabel('Thinking through your question…');
  assert.equal(await page.evaluate(() => window.progressTimersPending.size), 3);
  await complete();
@@ -61,5 +77,5 @@ try {
  await page.clock.runFor(20000);
  assert.equal(await progress.count(), 0);
  assert.deepEqual(errors, []);
- console.log('PASS answer progress: all stages, fresh request reset, removal, and timer cleanup (mocked APIs)');
+ console.log('PASS keyboard submission and answer progress: Enter, Shift+Enter, composition, all stages, reset, removal, and timer cleanup (mocked APIs)');
 } finally { await browser.close(); }

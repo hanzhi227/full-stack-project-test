@@ -323,6 +323,12 @@ export function Workspace() {
               aria-describedby="question-hint"
               disabled={busy}
               onChange={event => dispatch({ type: 'question-changed', question: event.target.value })}
+              onKeyDown={event => {
+                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
             />
             <div className="question-actions">
               <p id="question-hint" className="helper-text">
