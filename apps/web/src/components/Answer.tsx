@@ -10,7 +10,10 @@ export function Answer({ turn }: { turn: ConversationTurn }) {
       <p className={`answer-status answer-status--${response.status}`}>
         {answerStatusLabels[response.status]}
       </p>
-      <p className="answer-text">{response.answer}</p>
+      <div className="answer-sleeve">
+        <p className="answer-sleeve__label">Answer</p>
+        <p className="answer-text">{response.answer}</p>
+      </div>
       {response.citations.length > 0 && (
         <section className="sources" aria-label="Sources">
           <h4>Sources</h4>

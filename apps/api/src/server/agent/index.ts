@@ -55,16 +55,17 @@ export function createAnswerQuestion(dependencies: AgentDependencies) {
       if (!result.success) throw new AppError('INVALID_MODEL_OUTPUT', 'The model returned invalid structured output. Try again.');
       return result.data;
     };
-    const guard = async <T>(run: () => Promise<T>): Promise<T> => {
+    const guard = async <T>(name: string, run: () => Promise<T>): Promise<T> => {
       try { return await run(); }
-      catch {
+      catch (error) {
         if (controller.signal.aborted) throw timeoutError;
+        console.error(JSON.stringify({ requestId, stage: name, code: error instanceof AppError ? error.code : 'UNEXPECTED_GUARD_ERROR' }));
         throw new AppError('GUARD_UNAVAILABLE', 'A required safety check is unavailable. Try again.');
       }
     };
 
     const workflow = async (): Promise<AskResponse> => {
-      const decision = await stage('request_guard', () => guard(() => structured(
+      const decision = await stage('request_guard', () => guard('request_guard', () => structured(
         requestGuardSchema, 'request_guard', requestGuardMessages(request), 900,
       )));
       if (decision.decision !== 'allowed') return response(decision.decision, decision.explanation);
@@ -105,7 +106,7 @@ export function createAnswerQuestion(dependencies: AgentDependencies) {
       });
       const cited = passages.filter(passage => draft.citationIds.includes(passage.id));
       const validIds = cited.length === draft.citationIds.length;
-      const grounding = await stage('grounding_guard', () => guard(() => structured(
+      const grounding = await stage('grounding_guard', () => guard('grounding_guard', () => structured(
         groundingGuardSchema, 'grounding_guard', groundingGuardMessages(decision.query, draft, passages), 2400,
       )));
       if (grounding.verdict === 'blocked') return response('blocked', blockedAnswer);
