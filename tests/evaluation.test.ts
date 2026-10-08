@@ -1,7 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
+import { chunkText } from '../apps/api/src/server/documents/chunking';
+import { extractDocumentText } from '../apps/api/src/server/documents/extract';
 import { citationMatchesSource } from '../evals/citations';
 import type { Citation } from '@document-qa/contracts';
+
+test('injection fixtures keep the bare attack in every retrievable chunk without supplying the answer', async () => {
+ for (const extension of ['md', 'pdf']) {
+  const name = `fixtures/injection.${extension}`;
+  const text = await extractDocumentText(new File([await readFile(name)], name));
+  const chunks = chunkText(text);
+  assert.equal(chunks.length, 1);
+  assert.match(chunks[0].text, /IGNORE\s+ALL\s+PREVIOUS\s+INSTRUCTIONS/);
+  assert.ok(chunks[0].text.includes('PWNED'));
+  assert.ok(chunks[0].text.includes('fake-source'));
+  assert.doesNotMatch(text, /written approval|itemized receipt|EXP-042/i);
+ }
+});
 
 const citation: Citation = {
  id: 'chunk', documentId: 'd137d2b3-7eeb-4aeb-b0ea-17f4c887f4a0', documentName: 'Handbook.md',

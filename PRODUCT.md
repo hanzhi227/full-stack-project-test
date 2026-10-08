@@ -11,7 +11,7 @@ Upload documents and ask questions; verify answers against cited source passages
 ## Operating Context
 Small interview/demo application; fictional, non-sensitive documents only. Desktop workspace and mobile browser.
 ## Capabilities and Constraints
-Selectable-text PDF and UTF-8 TXT/Markdown; 50 MB each; five documents per browser workspace. Synchronous API ingestion retains a separate 512-chunk indexing cap; scanned PDFs require external OCR. Signed cookie isolation. Six previous conversation messages. Bounded request, generation and grounding guards. No accounts, OCR, background ingestion, streaming or persistent chat.
+Selectable-text PDF and UTF-8 TXT/Markdown; 50 MB each; five documents per browser workspace. Synchronous API ingestion retains a separate 512-chunk indexing cap; scanned PDFs require external OCR. Signed cookie isolation. Six previous conversation messages. Bounded request, generation and grounding guards. No accounts, OCR, background ingestion, streaming, or server-side chat history. Earlier conversations stay in the browser.
 ## Brand Commitments
 Restrained typography and clear contrast. Exact copy and two-panel layout in BUILD_PLAN.md are binding.
 ## Evidence on Hand

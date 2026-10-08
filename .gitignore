@@ -11,4 +11,5 @@ dist/
 .impeccable/review/
 .impeccable/mocks/
 evals/latest.json
+evals/safety-results/
 

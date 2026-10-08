@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { AskResponse, DocumentSummary } from '@document-qa/contracts';
 import {
-  answerStatusLabels, conversationHistory, initialWorkspaceState, validateUpload, workspaceReducer,
+  answerStatusLabels, conversationHistory, CONVERSATION_STORAGE_KEY, initialWorkspaceState,
+  parseStoredConversations, readBrowserConversations, snapshotConversations, validateUpload,
+  workspaceReducer, writeBrowserConversations,
 } from './workspace-state';
 import type { WorkspaceState } from './workspace-state';
 
@@ -111,16 +113,77 @@ test('history satisfies frozen message bounds even for empty or unusually long a
   assert.ok(history.every(message => message.content.length > 0 && message.content.length <= 8000));
 });
 
-test('Start new conversation clears questions and memory without losing documents or selection', () => {
+test('Start new conversation archives the current one without losing documents or selection', () => {
   const before = workspaceReducer(answered(ready(), 'Question'), { type: 'question-changed', question: 'Draft' });
   const reset = workspaceReducer(before, { type: 'reset' });
   assert.deepEqual(reset.documents, before.documents);
   assert.deepEqual(reset.selectedIds, before.selectedIds);
   assert.deepEqual(reset.turns, []);
+  assert.equal(reset.conversationId, null);
   assert.deepEqual(conversationHistory(reset.turns), []);
   assert.equal(reset.question, '');
   assert.equal(reset.askError, null);
-  assert.equal(reset.announcement, 'Conversation cleared. Your documents are still available.');
+  assert.equal(reset.previousConversations.length, 1);
+  assert.equal(reset.previousConversations[0].title, 'Question');
+  assert.deepEqual(reset.previousConversations[0].turns, before.turns);
+  assert.equal(reset.announcement, 'Started a new conversation. The previous one stays in this browser.');
+  const empty = workspaceReducer(reset, { type: 'reset' });
+  assert.equal(empty.previousConversations.length, 1);
+  assert.equal(empty.announcement, 'Conversation cleared. Your documents are still available.');
+});
+
+test('previous conversations can be reopened and replace one another', () => {
+  const first = workspaceReducer(answered(ready(), 'First question'), { type: 'reset' });
+  const second = answered(first, 'Second question');
+  const reopened = workspaceReducer(second, { type: 'open-conversation', id: first.previousConversations[0].id });
+  assert.equal(reopened.turns[0].question, 'First question');
+  assert.equal(reopened.conversationId, first.previousConversations[0].id);
+  assert.deepEqual(reopened.previousConversations.map(conversation => conversation.title), ['Second question']);
+  assert.equal(conversationHistory(reopened.turns)[0].content, 'First question');
+  const continued = workspaceReducer(answered(reopened, 'Follow-up on the first'), { type: 'reset' });
+  assert.deepEqual(continued.previousConversations.map(conversation => conversation.turns.length), [2, 1]);
+  assert.equal(continued.previousConversations.filter(conversation => conversation.title === 'First question').length, 1);
+  const pending = workspaceReducer(reopened, { type: 'ask-start', question: 'Wait' });
+  assert.equal(workspaceReducer(pending, { type: 'open-conversation', id: reopened.previousConversations[0].id }), pending);
+  assert.equal(workspaceReducer(reopened, { type: 'open-conversation', id: 'missing' }), reopened);
+});
+
+test('a visible conversation without an id receives one before it can be stored', () => {
+  const unsaved = { ...answered(ready(), 'Question'), conversationId: null };
+  assert.equal(snapshotConversations(unsaved).active, null);
+  const assigned = workspaceReducer(unsaved, { type: 'assign-conversation-id' });
+  assert.equal(typeof assigned.conversationId, 'string');
+  assert.equal(snapshotConversations(assigned).active?.turns[0].question, 'Question');
+  assert.equal(workspaceReducer(assigned, { type: 'assign-conversation-id' }), assigned);
+});
+
+test('only the twelve most recent conversations stay in browser storage', () => {
+  let state = ready();
+  for (let index = 0; index < 13; index += 1) state = workspaceReducer(answered(state, `Question ${index}`), { type: 'reset' });
+  assert.equal(state.previousConversations.length, 12);
+  assert.equal(state.previousConversations[0].title, 'Question 12');
+  assert.equal(state.previousConversations.at(-1)?.title, 'Question 1');
+  const active = answered(state, 'What is the deadline?');
+  const memory = new Map<string, string>();
+  const original = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: (key: string) => memory.get(key) ?? null,
+    setItem: (key: string, value: string) => { memory.set(key, value); },
+  } as Storage;
+  try {
+    writeBrowserConversations(snapshotConversations(active));
+    const stored = readBrowserConversations();
+    assert.equal(stored.ok, true);
+    if (!stored.ok || !stored.data?.active) throw new Error('Expected a stored conversation');
+    assert.equal(stored.data.active.turns[0].question, 'What is the deadline?');
+    assert.equal(stored.data.previous.length, 12);
+    assert.equal(memory.has(CONVERSATION_STORAGE_KEY), true);
+    assert.deepEqual(parseStoredConversations('{"version":1,"active":{"id":"x","turns":[]},"previous":[]}'), { active: null, previous: [] });
+    assert.equal(parseStoredConversations('{"version":2}'), null);
+    assert.equal(parseStoredConversations('not-json'), null);
+  } finally {
+    globalThis.localStorage = original;
+  }
 });
 
 test('upload validation enforces PDF/TXT/Markdown, 50 MB and five-document contract', () => {

@@ -27,9 +27,16 @@ npm run typecheck
 npm test
 npm run build
 npm run eval                 # Both services must be running; real provider calls.
+npm run eval:safety          # 40 generic labeled inputs; real decision calls, no services needed.
+npm run eval:safety:fixtures # 40 document-derived inputs: 10 each from the four source documents.
 npx playwright install chromium
 npm run test:browser         # Real browser upload/Q&A; also tests a simulated outage.
+npm run test:browser:progress # Web service only; mocked APIs, progress stages and timer cleanup.
 ```
+
+The safety dataset in `evals/safety-cases.ts` pairs 20 inappropriate inputs with 20 appropriate alternatives. `evals/fixture-safety-cases.ts` adds a separate 40-input dataset derived from the handbook, injection review, onboarding guide, and support policy: five inappropriate and five appropriate inputs per document. Run that dataset with `eval:safety:fixtures`. It tests user-input safety classification, not factual answers or full-document context. `eval:safety` uses the production safety check and the configured `OPENROUTER_DECISION_MODEL`; timestamped reports in `evals/safety-results/` separate unsafe inputs allowed, appropriate inputs blocked, and provider errors. Any mismatch or provider error exits nonzero. These synthetic cases are a regression suite, not a production safety benchmark.
+
+The injection evaluation uploads only the bare attack in `fixtures/injection.md`. The explanatory security review lives in `docs/INJECTION_REVIEW.md` and is not uploaded.
 
 Set `EVAL_BASE_URL` to test another frontend origin. The API's `APP_ORIGIN` must match. Evaluation/browser checks create only fictional documents in disposable workspaces; those documents remain indexed. No public deletion endpoint is shipped.
 
@@ -71,8 +78,8 @@ Verified provider choices: `qwen/qwen3-embedding-8b` (4096 dimensions), `deepsee
 
 ## Limits
 
-PDF (selectable text), UTF-8 TXT/Markdown, 50 MB/file, five documents/workspace, up to six retrieved passages and six prior messages. Scanned PDFs need external OCR; encrypted or malformed PDFs are rejected. Indexing has a separate 512-chunk cap (roughly 1–1.4 million text characters), so a file within the upload limit can still require splitting. Documents persist when a conversation resets; conversations do not survive refresh. Cookie expiry is seven days, but vector records are not automatically deleted. Extraction, chunking, and indexing run synchronously in the API process during the upload request; embeddings are requested from OpenRouter and vectors stored in Zilliz, with no background ingestion service. Large uploads increase API memory/CPU use and may exceed the frontend's 120-second proxy timeout; cleanup outages/process death may leave unselectable records requiring scoped operational cleanup.
+PDF (selectable text), UTF-8 TXT/Markdown, 50 MB/file, five documents/workspace, up to six retrieved passages and six prior messages. Scanned PDFs need external OCR; encrypted or malformed PDFs are rejected. Indexing has a separate 512-chunk cap (roughly 1–1.4 million text characters), so a file within the upload limit can still require splitting. Documents persist when a conversation resets. Earlier conversations stay in this browser and are not stored on the server. Cookie expiry is seven days, but vector records are not automatically deleted. Extraction, chunking, and indexing run synchronously in the API process during the upload request; embeddings are requested from OpenRouter and vectors stored in Zilliz, with no background ingestion service. Large uploads increase API memory/CPU use and may exceed the frontend's 120-second proxy timeout; cleanup outages/process death may leave unselectable records requiring scoped operational cleanup.
 
-Grounding is an LLM judgment, not a guarantee; inspect citations. No accounts, PDF extraction, streaming, semantic reranking or long-term chat memory. LangSmith tracing is disabled until its missing key is supplied; use fictional, non-sensitive data for remote traces. No claimed time savings or accuracy benchmark.
+Grounding is an LLM judgment, not a guarantee; inspect citations. No accounts, PDF extraction, streaming, semantic reranking, or server-side chat memory. Earlier conversations stay in the browser only. LangSmith tracing is disabled until its missing key is supplied; use fictional, non-sensitive data for remote traces. No claimed time savings or accuracy benchmark.
 
 See `BUILD_PLAN.md` for scope and `docs/BUILD_PROGRESS.md` for actual validation/deployment outcomes.

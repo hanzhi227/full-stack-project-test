@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useEffect, useReducer, useRef } from 'react';
+import React, { useEffect, useReducer, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { MAX_DOCUMENTS } from '@document-qa/contracts';
 import { api, ApiClientError } from '@/lib/api';
 import { Answer } from './Answer';
+import { AnswerProgress } from './AnswerProgress';
 import {
-  conversationHistory, initialWorkspaceState, validateUpload, workspaceReducer,
+  conversationHistory, initialWorkspaceState, readBrowserConversations, snapshotConversations,
+  validateUpload, workspaceReducer, writeBrowserConversations,
 } from './workspace-state';
 import type { WorkspaceError } from './workspace-state';
 
@@ -29,9 +31,13 @@ function ErrorNotice({ error, onRetry, disabled = false }: {
 
 export function Workspace() {
   const [state, dispatch] = useReducer(workspaceReducer, initialWorkspaceState);
+  const [storageReady, setStorageReady] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const questionInput = useRef<HTMLTextAreaElement>(null);
+  const conversationRegion = useRef<HTMLDivElement>(null);
   const failedFile = useRef<File | null>(null);
+  const storageWritable = useRef(true);
+  const focusConversation = useRef(false);
   // A synchronous lock closes the gap before React renders disabled controls.
   const operationInFlight = useRef(false);
   const listInFlight = useRef(false);
@@ -49,6 +55,33 @@ export function Workspace() {
     });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    const stored = readBrowserConversations();
+    if (!stored.ok) storageWritable.current = false;
+    else if (stored.data && (stored.data.active || stored.data.previous.length > 0)) {
+      dispatch({ type: 'restore-conversations', active: stored.data.active, previous: stored.data.previous });
+    }
+    setStorageReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (storageReady && state.turns.length > 0 && !state.conversationId) {
+      dispatch({ type: 'assign-conversation-id' });
+    }
+  }, [storageReady, state.conversationId, state.turns.length]);
+
+  useEffect(() => {
+    // The first paint still has the empty conversation, so wait until restore has been applied.
+    if (!storageReady || !storageWritable.current || (state.turns.length > 0 && !state.conversationId)) return;
+    writeBrowserConversations(snapshotConversations(state));
+  }, [storageReady, state]);
+
+  useEffect(() => {
+    if (!focusConversation.current) return;
+    focusConversation.current = false;
+    conversationRegion.current?.focus();
+  }, [state.conversationId]);
 
   async function retryList() {
     if (listInFlight.current) return;
@@ -120,6 +153,12 @@ export function Workspace() {
     questionInput.current?.focus();
   }
 
+  function openConversation(id: string) {
+    if (operationInFlight.current) return;
+    focusConversation.current = true;
+    dispatch({ type: 'open-conversation', id });
+  }
+
   return (
     <main className="workspace">
       <aside className="binder-spine" aria-hidden="true">
@@ -138,19 +177,24 @@ export function Workspace() {
             </div>
           )}
 
-          {state.pendingQuestion !== null && (
-            <p className="operation-notice" aria-busy="true">Finding an answer…</p>
-          )}
           {state.askError && <ErrorNotice error={state.askError} disabled={!canAsk} onRetry={() => void ask()} />}
 
-          {state.turns.length > 0 && (
-            <div className="conversation" aria-label="Recent questions and answers">
+          {(state.turns.length > 0 || state.pendingQuestion !== null) && (
+            <div
+              className="conversation"
+              ref={conversationRegion}
+              tabIndex={-1}
+              aria-label="Recent questions and answers"
+            >
               {state.turns.map((turn, index) => (
                 <Answer key={`${turn.response.requestId}-${index}`} turn={turn} />
               ))}
-              <p className="helper-text history-note">
-                Only the last six messages are kept in this conversation. Starting a new conversation keeps your documents.
-              </p>
+              {state.pendingQuestion !== null && <AnswerProgress question={state.pendingQuestion} />}
+              {state.turns.length > 0 && (
+                <p className="helper-text history-note">
+                  Only the last six messages are sent with the next question. Starting a new conversation keeps your documents, and earlier conversations stay in this browser.
+                </p>
+              )}
             </div>
           )}
         </section>
@@ -163,13 +207,37 @@ export function Workspace() {
             </p>
             <button
               type="button"
-              className="button button-text ask-rail__reset"
+              className="button button-secondary ask-rail__reset"
               disabled={busy || (!state.turns.length && !state.question && !state.askError)}
               onClick={resetConversation}
             >
               Start new conversation
             </button>
           </header>
+
+          {state.previousConversations.length > 0 && (
+            <nav className="previous-conversations" aria-label="Previous conversations">
+              <h2>Previous conversations</h2>
+              <p className="helper-text">Up to 12 stay in this browser. Nothing is saved on the server.</p>
+              <ul>
+                {state.previousConversations.map(conversation => (
+                  <li key={conversation.id}>
+                    <button
+                      type="button"
+                      className="previous-conversation"
+                      disabled={busy}
+                      onClick={() => openConversation(conversation.id)}
+                    >
+                      <span className="previous-conversation__title">{conversation.title}</span>
+                      <span className="previous-conversation__meta">
+                        {conversation.turns.length === 1 ? '1 question' : `${conversation.turns.length} questions`}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )}
 
           <div aria-labelledby="documents-heading">
             <h2 className="sr-only" id="documents-heading">Documents</h2>
@@ -187,7 +255,7 @@ export function Workspace() {
             />
             <button
               type="button"
-              className="button button-primary upload-button"
+              className="button button-secondary upload-button"
               aria-describedby="upload-hint"
               onClick={() => fileInput.current?.click()}
               disabled={busy || documentsUnavailable || state.documents.length >= MAX_DOCUMENTS}
