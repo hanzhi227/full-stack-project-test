@@ -1,5 +1,21 @@
 {
- "name":"@document-qa/web","version":"0.1.0","private":true,"engines":{"node":"22.x"},
- "scripts":{"predev":"npm run build --workspace @document-qa/contracts","dev":"next dev -H 0.0.0.0","build":"npm run build --workspace @document-qa/contracts && next build","start":"next start -H 0.0.0.0","typecheck":"tsc --noEmit"},
- "dependencies":{"@document-qa/contracts":"*","next":"^16.4.0","react":"^19.1.0","react-dom":"^19.1.0"}
+  "name": "@document-qa/web",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "bun": "1.4.x"
+  },
+  "scripts": {
+    "predev": "bun run --filter @document-qa/contracts build",
+    "dev": "bun --bun next dev -H 0.0.0.0",
+    "build": "bun run --filter @document-qa/contracts build && bun --bun next build && rm -rf .next/standalone/apps/web/.next/static && mkdir -p .next/standalone/apps/web/.next && cp -R .next/static .next/standalone/apps/web/.next/static",
+    "start": "HOSTNAME=0.0.0.0 bun .next/standalone/apps/web/server.js",
+    "typecheck": "bun --bun tsc --noEmit"
+  },
+  "dependencies": {
+    "@document-qa/contracts": "*",
+    "next": "^16.4.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
 }

@@ -20,7 +20,8 @@ function fixture() {
 async function multipart(bytes: Uint8Array|string, name='handbook.md') {
  const form=new FormData(); form.set('file',new File([typeof bytes==='string' ? bytes : new Uint8Array(bytes)],name));
  const request=new Request('http://localhost',{method:'POST',body:form});
- return {payload:Buffer.from(await request.arrayBuffer()),headers:{origin,'content-type':request.headers.get('content-type')!}};
+ const contentType = request.headers.get('content-type')!;
+ return {payload:Buffer.from(await request.arrayBuffer()),headers:{origin,'content-type':contentType}};
 }
 test('Fastify upload, list, cookie and ask preserve ownership across sessions',async t=>{
  const {app,answers}=fixture(); t.after(()=>app.close());

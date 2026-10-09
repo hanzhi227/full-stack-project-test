@@ -4,34 +4,34 @@ Two services: a Next.js workspace and a private Fastify API. Upload fictional UT
 
 ## Local setup
 
-Use Node.js 22 and npm. Credentials stay in the ignored root `.env`.
+Use Bun 1.4.2. Credentials stay in the ignored root `.env`.
 
 ```sh
-npm ci
+bun install --frozen-lockfile
 cp .env.example .env  # Fill credentials; don't overwrite an existing .env.
-npm run build --workspace @document-qa/contracts
-npm run setup:vectors -- --verify
+bun run --filter @document-qa/contracts build
+bun run setup:vectors --verify
 ```
 
 Run in separate terminals:
 
 ```sh
-npm run dev:api       # http://localhost:4000
-npm run dev:web       # http://localhost:3000
+bun run dev:api       # http://localhost:4000
+bun run dev:web       # http://localhost:3000
 ```
 
 `APP_ORIGIN=http://localhost:3000`, `BACKEND_URL=http://localhost:4000`, and `API_PORT=4000` are the local defaults. API and frontend configuration explicitly load the root `.env`. Browser requests use relative `/api/...` URLs; Next.js forwards them to Fastify. Changing `BACKEND_URL` requires a frontend rebuild.
 
 ```sh
-npm run typecheck
-npm test
-npm run build
-npm run eval                 # Both services must be running; real provider calls.
-npm run eval:safety          # 40 generic labeled inputs; real decision calls, no services needed.
-npm run eval:safety:fixtures # 40 document-derived inputs: 10 each from the four source documents.
-npx playwright install chromium
-npm run test:browser         # Real browser upload/Q&A; also tests a simulated outage.
-npm run test:browser:progress # Web service only; mocked APIs, progress stages and timer cleanup.
+bun run typecheck
+bun run test
+bun run build
+bun run eval                 # Both services must be running; real provider calls.
+bun run eval:safety          # 40 generic labeled inputs; real decision calls, no services needed.
+bun run eval:safety:fixtures # 40 document-derived inputs: 10 each from the four source documents.
+bunx playwright install chromium
+bun run test:browser         # Real browser upload/Q&A; also tests a simulated outage.
+bun run test:browser:progress # Web service only; mocked APIs, progress stages and timer cleanup.
 ```
 
 The safety dataset in `evals/safety-cases.ts` pairs 20 inappropriate inputs with 20 appropriate alternatives. `evals/fixture-safety-cases.ts` adds a separate 40-input dataset derived from the handbook, injection review, onboarding guide, and support policy: five inappropriate and five appropriate inputs per document. Run that dataset with `eval:safety:fixtures`. It tests user-input safety classification, not factual answers or full-document context. `eval:safety` uses the production safety check and the configured `OPENROUTER_DECISION_MODEL`; timestamped reports in `evals/safety-results/` separate unsafe inputs allowed, appropriate inputs blocked, and provider errors. Any mismatch or provider error exits nonzero. These synthetic cases are a regression suite, not a production safety benchmark.
@@ -42,12 +42,12 @@ Set `EVAL_BASE_URL` to test another frontend origin. The API's `APP_ORIGIN` must
 
 ## Railway
 
-Existing project: `glorious-spontaneity`. Both services use this repository's **root** as their root directory and the main branch. Shared `railway.json` selects Railpack; per-service build/start/health settings are configured in Railway.
+Existing project: `glorious-spontaneity`. Both services use this repository's **root** as their root directory and the main branch. Shared `railway.json` selects Railpack; per-service build/start/health settings are configured in Railway. Set `RAILPACK_BUN_VERSION=1.4.2` on both services and update their existing build/start commands to the values below. Both servers run on Bun; no separate TypeScript loader is needed. The web build copies static assets into `apps/web/.next/standalone/apps/web`, and its start script runs that server with `HOSTNAME=0.0.0.0`.
 
 | Setting | `web` | `api` |
 | --- | --- | --- |
-| Build | `npm ci && npm run build --workspace @document-qa/web` | `npm ci && npm run build --workspace @document-qa/api` |
-| Start | `npm run start --workspace @document-qa/web` | `npm run start --workspace @document-qa/api` |
+| Build | `bun install --frozen-lockfile && bun run --filter @document-qa/web build` | `bun install --frozen-lockfile && bun run --filter @document-qa/api build` |
+| Start | `bun run --filter @document-qa/web start` | `bun run --filter @document-qa/api start` |
 | Port | `PORT=3000` | `PORT=4000` |
 | Health | `/health` | `/api/health` |
 | Routing | `BACKEND_URL=http://full-stack-project-test.railway.internal:4000` | Listen on `::` for private networking |
@@ -56,9 +56,9 @@ Frontend: https://web-production-8c2080.up.railway.app
 
 API-only variables: OpenRouter key/models, Zilliz endpoint/token/collection, session signing secret (at least 32 characters), optional LangSmith key/project, **`NODE_ENV=production`**, and **`APP_ORIGIN=https://web-production-8c2080.up.railway.app`**. No provider credentials belong on `web` or in `NEXT_PUBLIC_` variables. The configured API private hostname retained its original name when the service was renamed.
 
-Use **one API replica**: rate limits and workspace admission locks are process-local. Configure shared locking/limits before scaling. Keep `apps/<service>/**`, `packages/contracts/**`, `package*.json`, and `railway.json` in that service's watch paths (or leave watch paths unrestricted).
+Use **one API replica**: rate limits and workspace admission locks are process-local. Configure shared locking/limits before scaling. Keep `apps/<service>/**`, `packages/contracts/**`, `package.json`, `bun.lock`, and `railway.json` in that service's watch paths (or leave watch paths unrestricted).
 
-Health endpoints report application/configuration readiness, not live provider connectivity. Use `npm run check:providers` and `npm run setup:vectors -- --verify` for actual provider checks. Set up vectors outside request handling.
+Health endpoints report application/configuration readiness, not live provider connectivity. Use `bun run check:providers` and `bun run setup:vectors --verify` for actual provider checks. Set up vectors outside request handling.
 
 ## Code paths
 

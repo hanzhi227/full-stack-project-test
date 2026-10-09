@@ -1,35 +1,35 @@
 {
- "name": "document-qa",
- "version": "0.1.0",
- "private": true,
- "engines": {
-  "node": "22.x"
- },
- "workspaces": [
-  "apps/*",
-  "packages/*"
- ],
- "scripts": {
-  "dev": "npm run dev --workspace @document-qa/web",
-  "dev:web": "npm run dev --workspace @document-qa/web",
-  "dev:api": "npm run dev --workspace @document-qa/api",
-  "build": "npm run build --workspace @document-qa/api && npm run build --workspace @document-qa/web",
-  "typecheck": "npm run build --workspace @document-qa/contracts && tsc --noEmit && npm run typecheck --workspace @document-qa/api && npm run typecheck --workspace @document-qa/web",
-  "test": "npm run build --workspace @document-qa/contracts && tsx --test tests/*.test.ts apps/web/src/components/*.test.ts apps/web/src/components/*.test.tsx",
-  "setup:vectors": "tsx --env-file=.env scripts/setup-vector-store.ts",
-  "check:providers": "tsx --env-file=.env scripts/check-providers.ts",
-  "eval": "tsx --env-file=.env scripts/evaluate.ts",
-  "eval:safety": "tsx --env-file=.env scripts/evaluate-safety.ts",
-  "eval:safety:fixtures": "tsx --env-file=.env scripts/evaluate-safety.ts --fixtures",
-  "test:browser:progress": "node scripts/check-answer-progress.mjs",
-    "test:browser": "node scripts/check-browser.mjs"
- },
- "devDependencies": {
-  "@types/node": "^22.0.0",
-  "@types/react": "^19.0.0",
-  "@types/react-dom": "^19.0.0",
-  "playwright": "^1.64.0",
-  "tsx": "^4.20.0",
-  "typescript": "^5.9.0"
- }
+  "name": "document-qa",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "bun": "1.4.x"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter @document-qa/web dev",
+    "dev:web": "bun run --filter @document-qa/web dev",
+    "dev:api": "bun run --filter @document-qa/api dev",
+    "build": "bun run --filter @document-qa/api build && bun run --filter @document-qa/web build",
+    "typecheck": "bun run --filter @document-qa/contracts build && bun --bun tsc --noEmit && bun run --filter @document-qa/api typecheck && bun run --filter @document-qa/web typecheck",
+    "test": "bun run --filter @document-qa/contracts build && bun test --no-env-file --isolate --timeout 30000 ./tests/*.test.ts ./apps/web/src/components/*.test.ts ./apps/web/src/components/*.test.tsx",
+    "setup:vectors": "bun --env-file=.env scripts/setup-vector-store.ts",
+    "check:providers": "bun --env-file=.env scripts/check-providers.ts",
+    "eval": "bun --env-file=.env scripts/evaluate.ts",
+    "eval:safety": "bun --env-file=.env scripts/evaluate-safety.ts",
+    "eval:safety:fixtures": "bun --env-file=.env scripts/evaluate-safety.ts --fixtures",
+    "test:browser:progress": "bun scripts/check-answer-progress.mjs",
+    "test:browser": "bun scripts/check-browser.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "playwright": "^1.64.0",
+    "typescript": "^5.9.0"
+  },
+  "packageManager": "bun@1.4.2"
 }
